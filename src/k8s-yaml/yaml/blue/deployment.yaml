@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dev-blue-dpm
+  namespace: dev-ns
+  labels:
+    dev/deployed: deploy
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      color: blue
+      dev/deployed: deploy
+  template:
+    metadata:
+      labels:
+        color: blue
+        dev/deployed: deploy
+    spec:
+      containers:
+      - image: IMAGE
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "250m"
+          limits:
+            memory: "80Mi"
+            cpu: "300m"
+        name: dev-blue-container
+        ports:
+        - containerPort: 8080
+        volumeMounts:
+        - name: dev-pv
+          mountPath: /aws/static/
+      volumes:
+      - name: dev-pv
+        persistentVolumeClaim:
+          claimName: efs-claim
+  strategy:
+    type: Recreate

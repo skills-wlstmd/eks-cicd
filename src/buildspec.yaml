@@ -1,0 +1,36 @@
+version: 0.2
+run-as: root
+
+phases:
+  install:
+    commands:
+      - echo install package...
+      - curl -O https://s3.us-west-2.amazonaws.com/amazon-eks/1.30.2/2024-07-12/bin/linux/amd64/kubectl
+      - chmod 777 kubectl
+      - mv kubectl /usr/bin
+  pre_build:
+    commands:
+      - AccountID=$(aws sts get-caller-identity --query "Account" --output text)
+      - BLUE_ECR_NAME="dev-blue-ecr"
+      - GREEN_ECR_NAME="dev-green-ecr"
+      - aws ecr get-login-password --region ap-northeast-2 | docker login --username AWS --password-stdin $AccountID.dkr.ecr.ap-northeast-2.amazonaws.com
+      - BLUE_URI=$AccountID.dkr.ecr.ap-northeast-2.amazonaws.com/$BLUE_ECR_NAME
+      - GREEN_URI=$AccountID.dkr.ecr.ap-northeast-2.amazonaws.com/$GREEN_ECR_NAME
+      - IMAGE_TAG=$(date -d "+9 hours" "+%Y-%m-%d.%H.%M.%S")
+  build:
+    commands:
+      - echo Building the Docker image...
+      - echo Building the Docker image...
+      - docker build -t $BLUE_URI:$IMAGE_TAG ./blue/
+      - docker build -t $GREEN_URI:$IMAGE_TAG ./green/
+      - echo Pushing the Docker images...
+      - docker push $BLUE_URI:$IMAGE_TAG
+      - docker push $GREEN_URI:$IMAGE_TAG
+  post_build:
+    commands:
+      - echo Writing image definition file...
+      - sed -i "s|IMAGE|$BLUE_URI:$IMAGE_TAG|g" ./k8s-yaml/yaml/blue/deployment.yaml
+      - sed -i "s|IMAGE|$GREEN_URI:$IMAGE_TAG|g" ./k8s-yaml/yaml/green/deployment.yaml
+      - aws eks --region ap-northeast-2 update-kubeconfig --name dev-eks-cluster
+      - kubectl apply -f ./k8s-yaml/yaml/blue/deployment.yaml
+      - kubectl apply -f ./k8s-yaml/yaml/green/deployment.yaml
